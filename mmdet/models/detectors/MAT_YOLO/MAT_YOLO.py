@@ -42,7 +42,7 @@ def random_noise_levels():
 grads = {}
 def save_grad(name):
     def hook_fn(grad):
-        #print(grad)
+        print(grad)       #检查一次前向反向传播后，grad梯度字典内有没有nan值，若有，说明在反向传播的某个位置不正确
         grads[name] = grad
         return grad
     return hook_fn
@@ -137,6 +137,8 @@ class MAT_YOLO(BaseDetector):
         parameter setting
         '''
         device = img.device
+        # print(img.shape)
+        # print(img)
         config = self.degration_cfg
         # camera color matrix
         xyz2cams = [[[1.0234, -0.2969, -0.2266],
@@ -169,12 +171,17 @@ class MAT_YOLO(BaseDetector):
         epsilon = torch.FloatTensor([1e-8]).to(torch.device(device))
         gamma = random.uniform(config['gamma_range'][0], config['gamma_range'][1])
         img2 = torch.max(img1, epsilon) ** gamma
+        # print(img2.shape)
+        # print(img2)
         # sRGB2cRGB
         xyz2cam = random.choice(xyz2cams)
         rgb2cam = np.matmul(xyz2cam, rgb2xyz)
         rgb2cam = torch.from_numpy(rgb2cam / np.sum(rgb2cam, axis=-1)).to(torch.float).to(torch.device(device))
+        # print(rgb2cam.shape)
         # print(rgb2cam)
         img3 = self.apply_ccm(img2, rgb2cam)
+        # print(img3.shape)
+        # print(img3)
         # img3 = torch.clamp(img3, min=0.0, max=1.0)
 
         # inverse WB
@@ -200,7 +207,8 @@ class MAT_YOLO(BaseDetector):
 
         else:
             img4 = img3 * gains1
-
+        # print(img4.shape)
+        # print(img4)
         '''
         (2)low light corruption part: 5.darkness, 6.shot and read noise 
         '''
@@ -229,27 +237,39 @@ class MAT_YOLO(BaseDetector):
         # print(quan_noise)
         # img7 = torch.clamp(img6 + quan_noise, min=0)
         img7 = img6 + quan_noise
+        # print(img7.shape)
+        # print(img7)
         # white balance
         gains2 = np.stack([red_gain, 1.0, blue_gain])
         gains2 = gains2[np.newaxis, np.newaxis, :]
         gains2 = torch.FloatTensor(gains2).to(torch.device(device))
         img8 = img7 * gains2
+        # print(img8.shape)
+        # print(img8)
         # cRGB2sRGB
-        cam2rgb = torch.linalg.inv(rgb2cam)
+        cam2rgb = (torch.linalg.inv(rgb2cam.to('cpu'))).to(torch.device(device))
+        # print(cam2rgb.shape)
+        # print(cam2rgb)
         
         
         img9 = self.apply_ccm(img8, cam2rgb)
+        # print(img9.shape)
+        # print(img9)
         # gamma correction
         img10 = torch.max(img9, epsilon) ** (1 / gamma)
+        # print(img10.shape)
+        # print(img10)
 
 
 
         img_low = img10.permute(2, 0, 1)  # (H, W, C) -- (C, H, W)
+        # print(img_low.shape)
+        # print(img_low)
         # degration infomations: darkness, gamma value, WB red, WB blue
         # dark_gt = torch.FloatTensor([darkness]).to(torch.device(device))
         para_gt = torch.FloatTensor([darkness, 1.0 / gamma, 1.0 / red_gain, 1.0 / blue_gain]).to(torch.device(device))
         # others_gt = torch.FloatTensor([1.0 / gamma, 1.0, 1.0]).to(torch.device(device))
-        # print('the degration information:', degration_info)
+        # print('the degration information:', para_gt)
         return img_low, para_gt
 
     def extract_feat_aet(self, img, img_dark):
@@ -260,18 +280,23 @@ class MAT_YOLO(BaseDetector):
         concat(light_feature, low_feature1) --> aet_head
         """
         x_light = self.backbone(img)
+        # print(x_light.shape)
+        # print(x_light)
         x_dark = self.backbone(img_dark)
+        # print(x_dark.shape)
+        # print(x_dark)
         feat = x_light[2]  # last feature in backbone of low light images
         feat1 = x_dark[2]  # last feature in backboe of high light images
 
-        para_pred = self.aet(feat, feat1)
+        para_pred = self.aet(feat, feat1) #执行aethead得到aet低光退化参数
         # para_pred.register_hook(save_grad('aet_grad'))
         x_light[2].register_hook(save_grad('light_grad'))
         x_dark[2].register_hook(save_grad('dark_grad'))
 
         if self.with_neck:
             x_dark = self.neck(x_dark)
-        # print(x_trans.shape)
+        # print(x_dark.shape)
+        # print(x_dark)
         return x_dark, para_pred
 
     def extract_feat(self, img_dark):
@@ -316,7 +341,7 @@ class MAT_YOLO(BaseDetector):
         Returns:
             dict[str, Tensor]: A dictionary of loss components.
         """
-        # print(img.shape)
+        print(img.shape)
         # generate low light degration images part and get degration informations
         # generate low light images
         batch_size = img.shape[0]
@@ -328,6 +353,9 @@ class MAT_YOLO(BaseDetector):
         # Generation of degraded data and AET groundtruth
         for i in range(batch_size):
             img_dark[i], para_gt[i] = self.Low_Illumination_Degrading(img[i], img_metas[i])
+            print(para_gt[i])
+            print(para_gt[i].shape)
+            print(img_dark[i].shape)
         # img_dark = torch.stack([self.Low_Illumination_Degrading(img[i], img_metas[i])[0] for i in range(img.shape[0])],
         #                        dim=0)
         # degration_info = torch.stack(
@@ -338,21 +366,25 @@ class MAT_YOLO(BaseDetector):
         x_dark, para_pred = self.extract_feat_aet(img, img_dark)
         losses = self.bbox_head.forward_train(x_dark, img_metas, gt_bboxes,
                                               gt_labels, gt_bboxes_ignore)
+        # print(losses)
         aet_loss = 10*self.weight_L1_loss(para_pred, para_gt)
 
         losses['loss_aet'] = [aet_loss]
+        # print(aet_loss)
         #losses.update(aet_loss)
         if not grads:
-            #print('0000000000')
-           ort_loss = torch.cuda.FloatTensor(1).fill_(0.0).to(torch.device(device))
+            print('0000000000')
+            ort_loss = torch.cuda.FloatTensor(1).fill_(0.0).to(torch.device(device))
         if grads:
-            #print('1111111111')
+            print('1111111111')
             ort_loss = 5*torch.mean(torch.abs(self.loss_ort(grads['light_grad'].view(batch_size,-1), grads['dark_grad'].view(batch_size,-1))))+\
                             0.5*torch.mean(1 - torch.abs(self.loss_ort(grads['light_grad'].view(batch_size,-1), grads['light_grad'].view(batch_size,-1)))) +\
                             0.5*torch.mean(1 - torch.abs(self.loss_ort(grads['dark_grad'].view(batch_size,-1), grads['dark_grad'].view(batch_size,-1))))
            # ort_loss = 0.1 * torch.mean(torch.abs(self.loss_ort(grads['light_grad'].view(batch_size,-1),
            #                                                     grads['dark_grad'].view(batch_size,-1))))
         losses['loss_ort'] = ort_loss
+        # print(ort_loss)
+        print(losses)
 
         return losses
 

@@ -751,7 +751,7 @@ class SwinTransformer(BaseModule):
 
         outs = []
         for i, stage in enumerate(self.stages):
-            x, hw_shape, out, out_hw_shape = stage(x, hw_shape)
+            x, hw_shape, out, out_hw_shape = stage(x, hw_shape) #对于每个阶段，将 x 和 hw_shape 作为输入传递，并获得当前阶段的输出 out 以及对应的 out_hw_shape
             if i in self.out_indices:
                 norm_layer = getattr(self, f'norm{i}')
                 out = norm_layer(out)

@@ -14,7 +14,7 @@ class AET_head(nn.Module):
     feat of transformed images, passed by global pool and return the transformed
     results'''
     def __init__(self,
-                 indim= 2048, 
+                 indim= 1536, #与forward中x的第二个维度匹配
                  num_classes=4,
                  ):
         super(AET_head, self).__init__()
@@ -33,10 +33,14 @@ class AET_head(nn.Module):
         return F.avg_pool2d(feat, (feat.size(2), feat.size(3))).view(-1, num_channels)
     
     def forward(self, feat1, feat2):
+        # print(feat1.shape)
+        # print(feat2.shape)
         feat1 = self.global_pool(feat1)
         feat2 = self.global_pool(feat2)
+        # print(feat1.shape)
+        # print(feat2.shape)
         device = feat1[0][0].device
-        #print(device)
+        # print(device)
         x = torch.cat((feat1, feat2), dim=1)
         # print(x.shape)
         x = self.fc1.to(torch.device(device))(x)

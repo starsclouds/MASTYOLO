@@ -253,18 +253,29 @@ def train_aet_detector(model,
     # print('rpn_head_number:', sum(param.numel() for param in model.rpn_head.parameters()))
     print('aet_head_number:', sum(param.numel() for param in model.aet.parameters()))
     
-    #set different learning rate in different blocks
-    param_group = []
-    param_group += [{'params': model.backbone.parameters(), 'lr': cfg.optimizer.lr[0]}]
-    param_group += [{'params': model.neck.parameters(), 'lr': cfg.optimizer.lr[0]}]
-    param_group += [{'params': model.bbox_head.parameters(), 'lr': cfg.optimizer.lr[0]}]
-    # param_group += [{'params': model.roi_head.parameters(), 'lr': cfg.optimizer.lr[0]}]
-    # param_group += [{'params': model.rpn_head.parameters(), 'lr': cfg.optimizer.lr[0]}]
-    param_group += [{'params': model.aet.parameters(), 'lr': cfg.optimizer.lr[1]}]
+    # #set different learning rate in different blocks
+    # param_group = []
+    # param_group += [{'params': model.backbone.parameters(), 'lr': cfg.optimizer.lr[0]}]
+    # param_group += [{'params': model.neck.parameters(), 'lr': cfg.optimizer.lr[0]}]
+    # param_group += [{'params': model.bbox_head.parameters(), 'lr': cfg.optimizer.lr[0]}]
+    # # param_group += [{'params': model.roi_head.parameters(), 'lr': cfg.optimizer.lr[0]}]
+    # # param_group += [{'params': model.rpn_head.parameters(), 'lr': cfg.optimizer.lr[0]}]
+    # param_group += [{'params': model.aet.parameters(), 'lr': cfg.optimizer.lr[1]}]
 
-    #design the optimizer and set learning rate
-    optimizer = torch.optim.SGD(param_group, cfg.optimizer.lr[0], momentum=0.9, weight_decay=0.0001)
+    # #design the optimizer and set learning rate
+    # optimizer = torch.optim.SGD(param_group, cfg.optimizer.lr[0], momentum=0.9, weight_decay=0.0001)
     
+    
+    # set different learning rate in different blocks
+    param_group = []
+    param_group += [{'params': model.backbone.parameters(), 'lr': cfg.optimizer.lr[0]},
+                    {'params': model.neck.parameters(), 'lr': cfg.optimizer.lr[0]},
+                    {'params': model.bbox_head.parameters(), 'lr': cfg.optimizer.lr[0]},
+                    {'params': model.aet.parameters(), 'lr': cfg.optimizer.lr[1]}]
+
+    # design the optimizer and set learning rate
+    optimizer = torch.optim.AdamW(param_group, lr=cfg.optimizer.lr[0], betas=cfg.optimizer.betas, weight_decay=cfg.optimizer.weight_decay)
+        
     # put model on gpus
     if distributed:
         find_unused_parameters = cfg.get('find_unused_parameters', False)

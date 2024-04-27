@@ -1,10 +1,10 @@
 _base_ = '../_base_/default_runtime.py'
+# load_from = '/root/MATYOLO/work_dirs/0426/latest.pth'
 work_dir='../autodl-tmp/work_dirs'
 pretrained = 'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth'
 # model settings
 model = dict(
-    type='MAT_YOLO',
-    pretrained = pretrained,
+    type='YOLOV3',
     backbone=dict(
         type='SwinTransformer',
         embed_dims=96,
@@ -29,7 +29,7 @@ model = dict(
         out_channels=[512, 256, 128]),
     bbox_head=dict(
         type='YOLOV3Head',
-        num_classes=80,
+        num_classes=12,
         in_channels=[512, 256, 128],
         out_channels=[1024, 512, 256],
         anchor_generator=dict(
@@ -55,32 +55,22 @@ model = dict(
             use_sigmoid=True,
             loss_weight=2.0,
             reduction='sum'),
-        loss_wh=dict(type='MSELoss', loss_weight=2.0, reduction='sum')),
-    aet=dict(type='AET_head'),
-    degration_cfg=dict(darkness_range=(0.01, 1.0),
-                       gamma_range=(2.0, 3.5),
-                       rgb_range=(0.8, 0.1),
-                       red_range=(1.9, 2.4),
-                       blue_range=(1.5, 1.9),
-                       quantisation=[12, 14, 16]),
-    ort_cfg=dict(use_ort=True))
+        loss_wh=dict(type='MSELoss', loss_weight=2.0, reduction='sum')))
 # training and testing settings
-train_cfg=dict(
+train_cfg = dict(
     assigner=dict(
-        type='GridAssigner',
-        pos_iou_thr=0.5,
-        neg_iou_thr=0.5,
-        min_pos_iou=0))
-test_cfg=dict(
+        type='GridAssigner', pos_iou_thr=0.5, neg_iou_thr=0.5, min_pos_iou=0))
+test_cfg = dict(
     nms_pre=1000,
     min_bbox_size=0,
     score_thr=0.05,
     conf_thr=0.005,
-    nms=dict(type='nms', iou_threshold=0.45),
+    nms=dict(type='nms', iou_thr=0.45),
     max_per_img=100)
+
 # dataset settings
-dataset_type = 'CocoDataset'
-data_root = '../autodl-tmp/data/coco/'
+dataset_type = 'ExdarkDataset'
+data_root = '../autodl-tmp/data/Exdark/'
 img_norm_cfg = dict(mean=[0, 0, 0], std=[255., 255., 255.], to_rgb=True)
 train_pipeline = [
     dict(type='LoadImageFromFile', to_float32=True),
@@ -94,19 +84,20 @@ train_pipeline = [
         type='MinIoURandomCrop',
         min_ious=(0.4, 0.5, 0.6, 0.7, 0.8, 0.9),
         min_crop_size=0.3),
-    dict(type='Resize', img_scale=[(448, 448)], keep_ratio=True),
+    dict(type='Resize', img_scale=[(320, 320), (608, 608)], keep_ratio=True),
     dict(type='RandomFlip', flip_ratio=0.5),
-    # dict(type='PhotoMetricDistortion'),
-    dict(type='Normalize', **img_norm_cfg),
+    dict(type='Normalize', **img_norm_cfg), #this step change the images from bgr2rgb
     dict(type='Pad', size_divisor=32),
     dict(type='DefaultFormatBundle'),
+    #return img gt_bboxer gt_labels
     dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels'])
 ]
+
 test_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(
         type='MultiScaleFlipAug',
-        img_scale=(448, 448),
+        img_scale=(608, 608),
         flip=False,
         transforms=[
             dict(type='Resize', keep_ratio=True),
@@ -123,24 +114,24 @@ data = dict(
     workers_per_gpu=4,
     train=dict(
         type=dataset_type,
-        ann_file=data_root + 'annotations/instances_train2017.json',
-        img_prefix=data_root + 'train2017/',
+        ann_file=data_root + 'main/train.txt',
+        img_prefix=data_root + 'JPEGImages/IMGS',   # Direct use low-light dataset
         pipeline=train_pipeline),
     val=dict(
         type=dataset_type,
-        ann_file=data_root + 'annotations/instances_val2017.json',
-        img_prefix=data_root + 'val2017/',
+        ann_file = data_root + 'main/val.txt',
+        img_prefix=data_root + 'JPEGImages/IMGS',
         pipeline=test_pipeline),
     test=dict(
         type=dataset_type,
-        ann_file=data_root + 'annotations/instances_val2017.json',
-        img_prefix=data_root + 'val2017/',
+        ann_file = data_root + 'main/val.txt',
+        img_prefix=data_root + 'JPEGImages/IMGS',
         pipeline=test_pipeline))
 
-
+# optimizer
 optimizer = dict(
     type='AdamW',
-    lr=[0.0001,0.00001],
+    lr=0.0002,
     betas=(0.9, 0.999),
     weight_decay=0.05,
     paramwise_cfg=dict(
@@ -151,13 +142,13 @@ optimizer = dict(
         }))
 optimizer_config = dict(grad_clip=None)
 
-
+# learning policy
 lr_config = dict(
     policy='step',
     warmup='linear',
     warmup_iters=1000,
-    step=[27, 33])
+    step=[54, 66])
 
-total_epochs = 36
-# runner = dict(type='EpochBasedRunner', max_epochs=36)
-evaluation = dict(interval=1, metric=['bbox'])
+total_epochs = 72
+# runtime settings
+evaluation = dict(interval=3, metric=['mAP'])
