@@ -1,5 +1,4 @@
 _base_ = '../_base_/default_runtime.py'
-# load_from = '/root/MATYOLO/work_dirs/0426/latest.pth'
 work_dir='../autodl-tmp/work_dirs'
 pretrained = 'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth'
 # model settings
@@ -131,7 +130,7 @@ data = dict(
 # optimizer
 optimizer = dict(
     type='AdamW',
-    lr=0.0002,
+    lr=0.0001,
     betas=(0.9, 0.999),
     weight_decay=0.05,
     paramwise_cfg=dict(
