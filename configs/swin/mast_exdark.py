@@ -1,5 +1,6 @@
 _base_ = '../_base_/default_runtime.py'
 work_dir='../autodl-tmp/work_dirs'
+load_from = '../autodl-tmp/work_dirs/mast_coco_bs32_lr1e-4_best_model/epoch_33.pth'
 pretrained = 'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth'
 # model settings
 model = dict(
@@ -109,7 +110,7 @@ test_pipeline = [
 ]
 
 data = dict(
-    samples_per_gpu=16,
+    samples_per_gpu=8,
     workers_per_gpu=4,
     train=dict(
         type=dataset_type,
@@ -127,27 +128,44 @@ data = dict(
         img_prefix=data_root + 'JPEGImages/IMGS',
         pipeline=test_pipeline))
 
-# optimizer
-optimizer = dict(
-    type='AdamW',
-    lr=0.0001,
-    betas=(0.9, 0.999),
-    weight_decay=0.05,
-    paramwise_cfg=dict(
-        custom_keys={
-            'absolute_pos_embed': dict(decay_mult=0.),
-            'relative_position_bias_table': dict(decay_mult=0.),
-            'norm': dict(decay_mult=0.)
-        }))
-optimizer_config = dict(grad_clip=None)
-
+# optimizer SGD
+optimizer = dict(type='SGD', lr=0.001, momentum=0.9, weight_decay=0.0005)
+optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 # learning policy
 lr_config = dict(
     policy='step',
     warmup='linear',
-    warmup_iters=1000,
-    step=[54, 66])
-
-total_epochs = 72
+    warmup_iters=2000,  # same as burn-in in darknet
+    warmup_ratio=0.1,
+    step=[50, 50]
+    )
 # runtime settings
-evaluation = dict(interval=3, metric=['mAP'])
+total_epochs = 50
+evaluation = dict(interval=1, metric=['mAP'])
+
+
+
+# optimizer AdamW
+# optimizer = dict(
+#     type='AdamW',
+#     lr=0.00005,
+#     betas=(0.9, 0.999),
+#     weight_decay=0.05,
+#     paramwise_cfg=dict(
+#         custom_keys={
+#             'absolute_pos_embed': dict(decay_mult=0.),
+#             'relative_position_bias_table': dict(decay_mult=0.),
+#             'norm': dict(decay_mult=0.)
+#         }))
+# optimizer_config = dict(grad_clip=None)
+
+# # learning policy
+# lr_config = dict(
+#     policy='step',
+#     warmup='linear',
+#     warmup_iters=1000,
+#     step=[81, 99])
+
+# total_epochs = 108
+# # runtime settings
+# evaluation = dict(interval=1, metric=['mAP'])
